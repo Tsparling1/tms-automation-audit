@@ -1929,8 +1929,8 @@ function _buildAndSavePDF() {
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const W = 612, H = 792;
 
-  // ── Palette (matches UI exactly) ──────────────────────────────────
-  const CREAM      = [250, 250, 247];
+  // ── Palette ───────────────────────────────────────────────────────
+  const CREAM      = [250, 250, 247];   // #FAFAF7 — page background
   const WHITE      = [255, 255, 255];
   const CHARCOAL   = [28,  28,  30 ];
   const GOLD       = [184, 134, 11 ];
@@ -1941,6 +1941,8 @@ function _buildAndSavePDF() {
   const GREEN_C    = [21,  128, 61 ];
   const YELLOW_C   = [180, 83,  9  ];
   const RED_C      = [185, 28,  28 ];
+
+  const CONTACT = 'tom@tms-solutions-group.com  \u00B7  tms-solutions-group.com  \u00B7  386-387-8620';
 
   const { overallPct, overallColor, catResults, top3Opps, hoursRange, displayBiz, today } = lastResults;
 
@@ -1955,36 +1957,39 @@ function _buildAndSavePDF() {
     return RED_C;
   }
   function labelFor(c) {
-    if (c === 'green')  return 'GREEN — Strong Foundation';
-    if (c === 'yellow') return 'YELLOW — Room to Grow';
-    return 'RED — High Opportunity';
-  }
-  function tintFor(c) {
-    // Very light version of each status color for card backgrounds
-    if (c === 'green')  return [240, 253, 244];
-    if (c === 'yellow') return [255, 251, 235];
-    return [254, 242, 242];
+    if (c === 'green')  return 'GREEN \u2014 Strong Foundation';
+    if (c === 'yellow') return 'YELLOW \u2014 Room to Grow';
+    return 'RED \u2014 High Opportunity';
   }
 
   function goldTopBar()    { setFill(GOLD); doc.rect(0, 0, W, 4, 'F'); }
   function goldBottomBar() { setFill(GOLD); doc.rect(0, H - 4, W, 4, 'F'); }
 
+  // Two-line footer: contact info + document title / page number
   function footer(pageNum, total) {
     setDraw(BORDER);
     doc.setLineWidth(0.5);
-    doc.line(40, H - 40, W - 40, H - 40);
+    doc.line(40, H - 52, W - 40, H - 52);
+
     setColor(GRAY);
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
-    doc.setCharSpace(0.5);
-    doc.text('TMS SOLUTIONS GROUP  ·  TIME & AUTOMATION DISCOVERY AUDIT  ·  CONFIDENTIAL', W / 2, H - 26, { align: 'center' });
+    doc.setCharSpace(0.3);
+    doc.text(CONTACT, W / 2, H - 36, { align: 'center' });
     doc.setCharSpace(0);
-    doc.text(`${pageNum} / ${total}`, W - 40, H - 26, { align: 'right' });
+
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setCharSpace(0.5);
+    doc.text('TMS SOLUTIONS GROUP  \u00B7  TIME & AUTOMATION DISCOVERY AUDIT', W / 2, H - 22, { align: 'center' });
+    doc.setCharSpace(0);
+    doc.text(`${pageNum} / ${total}`, W - 40, H - 22, { align: 'right' });
   }
 
+  // Every new page gets the cream background
   function newPage() {
     doc.addPage();
-    setFill(WHITE);
+    setFill(CREAM);
     doc.rect(0, 0, W, H, 'F');
   }
 
@@ -2008,9 +2013,8 @@ function _buildAndSavePDF() {
     );
     doc.rect(x, y, w, h, 'F');
     setDraw(sc);
-    doc.setLineWidth(1);
+    doc.setLineWidth(1.5);
     doc.rect(x, y, w, h);
-    // Left accent bar
     doc.setFillColor(...sc);
     doc.rect(x, y, 4, h, 'F');
   }
@@ -2021,12 +2025,9 @@ function _buildAndSavePDF() {
   // ════════════════════════════════════════════════════════════════════
   // PAGE 1 — COVER
   // ════════════════════════════════════════════════════════════════════
-  setFill(WHITE);
-  doc.rect(0, 0, W, H, 'F');
-
-  // Cream header band
+  // Full cream background
   setFill(CREAM);
-  doc.rect(0, 0, W, 318, 'F');
+  doc.rect(0, 0, W, H, 'F');
   goldTopBar();
 
   // TMS logotype
@@ -2062,47 +2063,48 @@ function _buildAndSavePDF() {
   doc.text('AUTOMATION READINESS REPORT', W / 2, 256, { align: 'center' });
   doc.setCharSpace(0);
 
-  borderLine(56, 292, W - 56);
+  borderLine(56, 288, W - 56);
 
   // Business name + date
   if (displayBiz !== 'Your Business') {
     setColor(GOLD);
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text(displayBiz, W / 2, 334, { align: 'center' });
+    doc.text(displayBiz, W / 2, 326, { align: 'center' });
     setColor(GRAY);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    doc.text(today, W / 2, 354, { align: 'center' });
+    doc.text(today, W / 2, 346, { align: 'center' });
   } else {
     setColor(GRAY);
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    doc.text(today, W / 2, 334, { align: 'center' });
+    doc.text(today, W / 2, 326, { align: 'center' });
   }
 
-  // Score card
-  const cardY = 408, cardW = 240, cardH = 148;
+  // Score card — clean, no text inside it beyond score + label
+  const cardY = 390, cardW = 260, cardH = 110;
   const cardX = W / 2 - cardW / 2;
   tintedCard(cardX, cardY, cardW, cardH, overallColor);
 
   setColor(sc);
   doc.setFontSize(54);
   doc.setFont('helvetica', 'bold');
-  doc.text(`${overallPct}%`, W / 2, cardY + 75, { align: 'center' });
+  doc.text(`${overallPct}%`, W / 2, cardY + 66, { align: 'center' });
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.setCharSpace(1.5);
-  doc.text(labelFor(overallColor).toUpperCase(), W / 2, cardY + 99, { align: 'center' });
+  doc.text(labelFor(overallColor).toUpperCase(), W / 2, cardY + 90, { align: 'center' });
   doc.setCharSpace(0);
 
-  // Short verdict excerpt (2 lines max)
+  // Verdict text — sits cleanly BELOW the score card
+  const verdictStartY = cardY + cardH + 24;  // 24pt gap below card
   setColor(GRAY_LIGHT);
-  doc.setFontSize(8.5);
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  const vShort = doc.splitTextToSize(getVerdictText(overallColor, overallPct), 430);
-  doc.text(vShort.slice(0, 2), W / 2, cardY + 122, { align: 'center' });
+  const vShort = doc.splitTextToSize(getVerdictText(overallColor, overallPct), 460);
+  doc.text(vShort, W / 2, verdictStartY, { align: 'center' });
 
   goldBottomBar();
   footer(1, TOTAL_PAGES);
@@ -2122,44 +2124,54 @@ function _buildAndSavePDF() {
   doc.setCharSpace(0);
   goldLine(56, 46, W - 56);
 
-  // Overall score banner
+  // Pre-measure verdict so the banner sizes to fit it fully
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  const vLines = doc.splitTextToSize(getVerdictText(overallColor, overallPct), 292);
+  // bannerH: top-pad(12) + label(16) + gap(8) + verdictLines + bot-pad(14)
+  const bannerH = Math.max(88, 12 + 16 + 8 + vLines.length * 13 + 14);
+  const bannerY = 84;
+
+  // Section heading
   setColor(CHARCOAL);
   doc.setFontSize(17);
   doc.setFont('helvetica', 'bold');
   doc.text('Automation Readiness Score', 56, 74);
 
-  // Tinted banner box
+  // Tinted banner box — tall enough for the full verdict
   doc.setFillColor(
     255 - (255 - sc[0]) * 0.07,
     255 - (255 - sc[1]) * 0.07,
     255 - (255 - sc[2]) * 0.07
   );
-  doc.rect(56, 84, 500, 78, 'F');
+  doc.rect(56, bannerY, 500, bannerH, 'F');
   setDraw(sc);
   doc.setLineWidth(1);
-  doc.rect(56, 84, 500, 78);
+  doc.rect(56, bannerY, 500, bannerH);
   doc.setFillColor(...sc);
-  doc.rect(56, 84, 4, 78, 'F');
+  doc.rect(56, bannerY, 4, bannerH, 'F');
 
-  // Big score
+  // Big score number (vertically centred in left column)
   setColor(sc);
   doc.setFontSize(40);
   doc.setFont('helvetica', 'bold');
-  doc.text(`${overallPct}%`, 106, 136);
+  doc.text(`${overallPct}%`, 106, bannerY + Math.round(bannerH * 0.60));
 
-  // Label + verdict
+  // Label
+  setColor(sc);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text(labelFor(overallColor), 210, 112);
+  doc.text(labelFor(overallColor), 210, bannerY + 26);
 
+  // Full verdict — no slice
   setColor(GRAY_LIGHT);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  const vLines = doc.splitTextToSize(getVerdictText(overallColor, overallPct), 296);
-  doc.text(vLines.slice(0, 3), 210, 128);
+  doc.text(vLines, 210, bannerY + 42);
 
-  // Hours lost callout
-  let ty = 186;
+  // Hours lost callout — starts below the now-dynamic banner
+  let ty = bannerY + bannerH + 20;
+
   setColor(GOLD);
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
@@ -2183,7 +2195,7 @@ function _buildAndSavePDF() {
 
   ty += 54;
 
-  // Category breakdown heading
+  // Category breakdown
   setColor(CHARCOAL);
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
@@ -2192,39 +2204,33 @@ function _buildAndSavePDF() {
   borderLine(56, ty, W - 56);
   ty += 18;
 
-  // Six category rows
   catResults.forEach((r, i) => {
     const rowColor = colorFor(r.color);
 
-    // Alternating row tint
     if (i % 2 === 0) {
-      setFill(CREAM);
+      // Alternating row uses a slightly lighter cream so it reads on the cream background
+      doc.setFillColor(242, 240, 234);
       doc.rect(56, ty - 13, 500, 27, 'F');
     }
-    // Left accent bar
     doc.setFillColor(...rowColor);
     doc.rect(56, ty - 13, 3, 27, 'F');
 
-    // Category name
     setColor(CHARCOAL);
     doc.setFontSize(9.5);
     doc.setFont('helvetica', 'normal');
     doc.text(r.cat.name, 70, ty + 2);
 
-    // Progress bar
     const barX = 258, barW = 180, barH = 6;
     setFill(BORDER);
     doc.rect(barX, ty - 2, barW, barH, 'F');
     doc.setFillColor(...rowColor);
     doc.rect(barX, ty - 2, barW * (r.pct / 100), barH, 'F');
 
-    // Score %
     setColor(rowColor);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.text(`${r.pct}%`, 452, ty + 2);
 
-    // Status label
     doc.setFontSize(7.5);
     doc.setCharSpace(0.8);
     doc.text(r.color.toUpperCase(), 492, ty + 2);
@@ -2258,15 +2264,14 @@ function _buildAndSavePDF() {
   let oy = 100;
 
   top3Opps.forEach((opp, i) => {
-    // Measure wrapped description to set card height dynamically
     doc.setFontSize(9.5);
     doc.setFont('helvetica', 'normal');
     const descLines = doc.splitTextToSize(opp.desc, 400);
-    // Layout: top-pad 14 + category 12 + gap 4 + title 16 + gap 6 + desc(n×13) + gap 8 + impact 12 + bot-pad 14
+    // top-pad(14) + category(12) + gap(4) + title(16) + gap(6) + desc + gap(8) + impact(12) + bot-pad(14)
     const cardHeight = 14 + 12 + 4 + 16 + 6 + (descLines.length * 13) + 8 + 12 + 14;
 
-    // Card background + border + left accent bar
     const cardSc = colorFor(catResults.find(r => r.cat.shortName === opp.catName)?.color || 'yellow');
+    // Cards 2 and 3 use white so they pop off the cream background
     const cardBg = i === 0 ? GOLD_LIGHT : WHITE;
     doc.setFillColor(...cardBg);
     setDraw(BORDER);
@@ -2275,7 +2280,7 @@ function _buildAndSavePDF() {
     doc.setFillColor(...cardSc);
     doc.rect(56, oy, 4, cardHeight, 'F');
 
-    // Rank circle (gold filled)
+    // Rank circle
     setFill(GOLD);
     doc.circle(82, oy + 20, 11, 'F');
     setColor(WHITE);
@@ -2291,19 +2296,19 @@ function _buildAndSavePDF() {
     doc.text(opp.catName.toUpperCase(), 104, oy + 16);
     doc.setCharSpace(0);
 
-    // Opportunity title
+    // Title
     setColor(CHARCOAL);
     doc.setFontSize(12.5);
     doc.setFont('helvetica', 'bold');
     doc.text(opp.title, 104, oy + 32);
 
-    // Description text
+    // Description
     setColor(GRAY_LIGHT);
     doc.setFontSize(9.5);
     doc.setFont('helvetica', 'normal');
     doc.text(descLines, 104, oy + 44);
 
-    // Impact badge text
+    // Impact badge
     setColor(GOLD);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
@@ -2314,12 +2319,11 @@ function _buildAndSavePDF() {
     oy += cardHeight + 12;
   });
 
-  // Divider before CTA
+  // Divider + CTA
   oy += 6;
   borderLine(56, oy, W - 56);
   oy += 18;
 
-  // CTA headline
   setColor(GOLD);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
@@ -2330,7 +2334,6 @@ function _buildAndSavePDF() {
   doc.text(ctaHeadLines, 56, oy);
   oy += ctaHeadLines.length * 16 + 6;
 
-  // CTA body
   setColor(GRAY_LIGHT);
   doc.setFontSize(9.5);
   doc.setFont('helvetica', 'normal');
@@ -2341,16 +2344,16 @@ function _buildAndSavePDF() {
   doc.text(ctaBodyLines, 56, oy);
   oy += ctaBodyLines.length * 13 + 14;
 
-  // Contact line
+  // Contact line in body
   setColor(GOLD);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('hello@tmssolutionsgroup.com  \u00B7  tmssolutionsgroup.com', 56, oy);
+  doc.text(CONTACT, 56, oy);
 
   goldBottomBar();
   footer(3, TOTAL_PAGES);
 
-  // Save
+  // ── Save ──────────────────────────────────────────────────────────
   const safeBiz = displayBiz !== 'Your Business'
     ? displayBiz.replace(/[^a-z0-9\s]/gi, '').trim().replace(/\s+/g, '-')
     : '';
