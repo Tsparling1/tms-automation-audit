@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root {
       --bg: #FAFAF7;
@@ -950,6 +951,30 @@
       color: var(--gold);
       background: var(--gold-dim);
     }
+    .btn-download {
+      background: transparent;
+      border: 1.5px solid var(--gold);
+      color: var(--gold);
+      padding: 16px 36px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Inter', inherit;
+      letter-spacing: 0.2px;
+    }
+    .btn-download:hover {
+      background: var(--gold);
+      color: #FFFFFF;
+      box-shadow: 0 4px 20px rgba(184,134,11,0.35);
+      transform: translateY(-1px);
+    }
+    .btn-download:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
 
     /* Results footer */
     .results-footer {
@@ -1376,6 +1401,7 @@ const OPPORTUNITIES = {
 let bizName = '';
 let currentCat = 0;
 let answers = {}; // { 'cat-qIdx': value }
+let lastResults = null; // cached when showResults() runs, used by downloadPDF()
 
 // =====================================================================
 // HELPERS
@@ -1739,6 +1765,9 @@ function showResults() {
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const displayBiz = bizName || 'Your Business';
 
+  // Cache for downloadPDF()
+  lastResults = { overallPct, overallColor, catResults, top3Opps, hoursRange, displayBiz, today };
+
   // Build results HTML
   const ringGrad = getRingGradient(overallPct, overallColor);
   const verdictText = getVerdictText(overallColor, overallPct);
@@ -1858,7 +1887,7 @@ function showResults() {
             <a href="mailto:hello@tmssolutionsgroup.com?subject=Automation%20Audit%20Results%20—%20${encodeURIComponent(displayBiz)}&body=Hi%20TMS%2C%0A%0AI%20just%20completed%20the%20Time%20%26%20Automation%20Audit.%20My%20overall%20score%20was%20${overallPct}%25%20(${overallColor.toUpperCase()}).%0A%0AId%20love%20to%20discuss%20next%20steps." class="btn-cta-primary">
               Book a Free Strategy Call →
             </a>
-            <button class="btn-restart" onclick="restartAudit()">Retake the Audit</button>
+            <button class="btn-download" id="btn-pdf" onclick="downloadPDF()">↓ Download My Report</button>
           </div>
         </div>
 
@@ -1875,10 +1904,468 @@ function showResults() {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// =====================================================================
+// PDF GENERATION
+// =====================================================================
+function downloadPDF() {
+  if (!lastResults || !window.jspdf) return;
+
+  // Button loading state
+  const btn = document.getElementById('btn-pdf');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+
+  // Small timeout lets the browser repaint before blocking on PDF build
+  setTimeout(() => {
+    try {
+      _buildAndSavePDF();
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '↓ Download My Report'; }
+    }
+  }, 30);
+}
+
+function _buildAndSavePDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+  const W = 612, H = 792;
+
+  // ── Palette (matches UI exactly) ──────────────────────────────────
+  const CREAM      = [250, 250, 247];
+  const WHITE      = [255, 255, 255];
+  const CHARCOAL   = [28,  28,  30 ];
+  const GOLD       = [184, 134, 11 ];
+  const GOLD_LIGHT = [254, 249, 231];
+  const BORDER     = [232, 229, 220];
+  const GRAY       = [107, 114, 128];
+  const GRAY_LIGHT = [75,  85,  99 ];
+  const GREEN_C    = [21,  128, 61 ];
+  const YELLOW_C   = [180, 83,  9  ];
+  const RED_C      = [185, 28,  28 ];
+
+  const { overallPct, overallColor, catResults, top3Opps, hoursRange, displayBiz, today } = lastResults;
+
+  // ── Helpers ────────────────────────────────────────────────────────
+  function setColor(rgb) { doc.setTextColor(...rgb); }
+  function setFill(rgb)  { doc.setFillColor(...rgb); }
+  function setDraw(rgb)  { doc.setDrawColor(...rgb); }
+
+  function colorFor(c) {
+    if (c === 'green')  return GREEN_C;
+    if (c === 'yellow') return YELLOW_C;
+    return RED_C;
+  }
+  function labelFor(c) {
+    if (c === 'green')  return 'GREEN — Strong Foundation';
+    if (c === 'yellow') return 'YELLOW — Room to Grow';
+    return 'RED — High Opportunity';
+  }
+  function tintFor(c) {
+    // Very light version of each status color for card backgrounds
+    if (c === 'green')  return [240, 253, 244];
+    if (c === 'yellow') return [255, 251, 235];
+    return [254, 242, 242];
+  }
+
+  function goldTopBar()    { setFill(GOLD); doc.rect(0, 0, W, 4, 'F'); }
+  function goldBottomBar() { setFill(GOLD); doc.rect(0, H - 4, W, 4, 'F'); }
+
+  function footer(pageNum, total) {
+    setDraw(BORDER);
+    doc.setLineWidth(0.5);
+    doc.line(40, H - 40, W - 40, H - 40);
+    setColor(GRAY);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setCharSpace(0.5);
+    doc.text('TMS SOLUTIONS GROUP  ·  TIME & AUTOMATION DISCOVERY AUDIT  ·  CONFIDENTIAL', W / 2, H - 26, { align: 'center' });
+    doc.setCharSpace(0);
+    doc.text(`${pageNum} / ${total}`, W - 40, H - 26, { align: 'right' });
+  }
+
+  function newPage() {
+    doc.addPage();
+    setFill(WHITE);
+    doc.rect(0, 0, W, H, 'F');
+  }
+
+  function borderLine(x1, y, x2) {
+    setDraw(BORDER);
+    doc.setLineWidth(0.5);
+    doc.line(x1, y, x2, y);
+  }
+  function goldLine(x1, y, x2) {
+    setDraw(GOLD);
+    doc.setLineWidth(1);
+    doc.line(x1, y, x2, y);
+  }
+
+  function tintedCard(x, y, w, h, statusColor) {
+    const sc = colorFor(statusColor);
+    doc.setFillColor(
+      255 - (255 - sc[0]) * 0.07,
+      255 - (255 - sc[1]) * 0.07,
+      255 - (255 - sc[2]) * 0.07
+    );
+    doc.rect(x, y, w, h, 'F');
+    setDraw(sc);
+    doc.setLineWidth(1);
+    doc.rect(x, y, w, h);
+    // Left accent bar
+    doc.setFillColor(...sc);
+    doc.rect(x, y, 4, h, 'F');
+  }
+
+  const sc = colorFor(overallColor);
+  const TOTAL_PAGES = 3;
+
+  // ════════════════════════════════════════════════════════════════════
+  // PAGE 1 — COVER
+  // ════════════════════════════════════════════════════════════════════
+  setFill(WHITE);
+  doc.rect(0, 0, W, H, 'F');
+
+  // Cream header band
+  setFill(CREAM);
+  doc.rect(0, 0, W, 318, 'F');
+  goldTopBar();
+
+  // TMS logotype
+  setColor(GOLD);
+  doc.setFontSize(38);
+  doc.setFont('helvetica', 'bold');
+  doc.setCharSpace(11);
+  doc.text('TMS', W / 2, 118, { align: 'center' });
+  doc.setCharSpace(0);
+
+  setColor(GRAY);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setCharSpace(4);
+  doc.text('SOLUTIONS GROUP', W / 2, 137, { align: 'center' });
+  doc.setCharSpace(0);
+
+  // Gold rule
+  setFill(GOLD);
+  doc.rect(W / 2 - 30, 149, 60, 1.5, 'F');
+
+  // Report title
+  setColor(CHARCOAL);
+  doc.setFontSize(30);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Time & Automation', W / 2, 194, { align: 'center' });
+  doc.text('Discovery Audit', W / 2, 230, { align: 'center' });
+
+  setColor(GOLD);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setCharSpace(2.5);
+  doc.text('AUTOMATION READINESS REPORT', W / 2, 256, { align: 'center' });
+  doc.setCharSpace(0);
+
+  borderLine(56, 292, W - 56);
+
+  // Business name + date
+  if (displayBiz !== 'Your Business') {
+    setColor(GOLD);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(displayBiz, W / 2, 334, { align: 'center' });
+    setColor(GRAY);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text(today, W / 2, 354, { align: 'center' });
+  } else {
+    setColor(GRAY);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text(today, W / 2, 334, { align: 'center' });
+  }
+
+  // Score card
+  const cardY = 408, cardW = 240, cardH = 148;
+  const cardX = W / 2 - cardW / 2;
+  tintedCard(cardX, cardY, cardW, cardH, overallColor);
+
+  setColor(sc);
+  doc.setFontSize(54);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`${overallPct}%`, W / 2, cardY + 75, { align: 'center' });
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setCharSpace(1.5);
+  doc.text(labelFor(overallColor).toUpperCase(), W / 2, cardY + 99, { align: 'center' });
+  doc.setCharSpace(0);
+
+  // Short verdict excerpt (2 lines max)
+  setColor(GRAY_LIGHT);
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  const vShort = doc.splitTextToSize(getVerdictText(overallColor, overallPct), 430);
+  doc.text(vShort.slice(0, 2), W / 2, cardY + 122, { align: 'center' });
+
+  goldBottomBar();
+  footer(1, TOTAL_PAGES);
+
+  // ════════════════════════════════════════════════════════════════════
+  // PAGE 2 — RESULTS OVERVIEW
+  // ════════════════════════════════════════════════════════════════════
+  newPage();
+  goldTopBar();
+
+  // Eyebrow + rule
+  setColor(GOLD);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setCharSpace(2.5);
+  doc.text('RESULTS OVERVIEW', 56, 38);
+  doc.setCharSpace(0);
+  goldLine(56, 46, W - 56);
+
+  // Overall score banner
+  setColor(CHARCOAL);
+  doc.setFontSize(17);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Automation Readiness Score', 56, 74);
+
+  // Tinted banner box
+  doc.setFillColor(
+    255 - (255 - sc[0]) * 0.07,
+    255 - (255 - sc[1]) * 0.07,
+    255 - (255 - sc[2]) * 0.07
+  );
+  doc.rect(56, 84, 500, 78, 'F');
+  setDraw(sc);
+  doc.setLineWidth(1);
+  doc.rect(56, 84, 500, 78);
+  doc.setFillColor(...sc);
+  doc.rect(56, 84, 4, 78, 'F');
+
+  // Big score
+  setColor(sc);
+  doc.setFontSize(40);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`${overallPct}%`, 106, 136);
+
+  // Label + verdict
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text(labelFor(overallColor), 210, 112);
+
+  setColor(GRAY_LIGHT);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  const vLines = doc.splitTextToSize(getVerdictText(overallColor, overallPct), 296);
+  doc.text(vLines.slice(0, 3), 210, 128);
+
+  // Hours lost callout
+  let ty = 186;
+  setColor(GOLD);
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setCharSpace(2);
+  doc.text('ESTIMATED TIME LOST TO MANUAL PROCESSES EACH WEEK', 56, ty);
+  doc.setCharSpace(0);
+  ty += 8;
+
+  setFill(GOLD_LIGHT);
+  setDraw(GOLD);
+  doc.setLineWidth(0.75);
+  doc.rect(56, ty, 500, 38, 'F');
+  doc.rect(56, ty, 500, 38);
+  doc.setFillColor(...GOLD);
+  doc.rect(56, ty, 4, 38, 'F');
+
+  setColor(CHARCOAL);
+  doc.setFontSize(17);
+  doc.setFont('helvetica', 'bold');
+  doc.text(hoursRange, 74, ty + 24);
+
+  ty += 54;
+
+  // Category breakdown heading
+  setColor(CHARCOAL);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Category Breakdown', 56, ty);
+  ty += 8;
+  borderLine(56, ty, W - 56);
+  ty += 18;
+
+  // Six category rows
+  catResults.forEach((r, i) => {
+    const rowColor = colorFor(r.color);
+
+    // Alternating row tint
+    if (i % 2 === 0) {
+      setFill(CREAM);
+      doc.rect(56, ty - 13, 500, 27, 'F');
+    }
+    // Left accent bar
+    doc.setFillColor(...rowColor);
+    doc.rect(56, ty - 13, 3, 27, 'F');
+
+    // Category name
+    setColor(CHARCOAL);
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(r.cat.name, 70, ty + 2);
+
+    // Progress bar
+    const barX = 258, barW = 180, barH = 6;
+    setFill(BORDER);
+    doc.rect(barX, ty - 2, barW, barH, 'F');
+    doc.setFillColor(...rowColor);
+    doc.rect(barX, ty - 2, barW * (r.pct / 100), barH, 'F');
+
+    // Score %
+    setColor(rowColor);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${r.pct}%`, 452, ty + 2);
+
+    // Status label
+    doc.setFontSize(7.5);
+    doc.setCharSpace(0.8);
+    doc.text(r.color.toUpperCase(), 492, ty + 2);
+    doc.setCharSpace(0);
+
+    ty += 28;
+  });
+
+  goldBottomBar();
+  footer(2, TOTAL_PAGES);
+
+  // ════════════════════════════════════════════════════════════════════
+  // PAGE 3 — TOP 3 OPPORTUNITIES + CTA
+  // ════════════════════════════════════════════════════════════════════
+  newPage();
+  goldTopBar();
+
+  setColor(GOLD);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setCharSpace(2.5);
+  doc.text('YOUR TOP PRIORITIES', 56, 38);
+  doc.setCharSpace(0);
+  goldLine(56, 46, W - 56);
+
+  setColor(CHARCOAL);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('3 Highest-Impact Automation Opportunities', 56, 76);
+
+  let oy = 100;
+
+  top3Opps.forEach((opp, i) => {
+    // Measure wrapped description to set card height dynamically
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'normal');
+    const descLines = doc.splitTextToSize(opp.desc, 400);
+    // Layout: top-pad 14 + category 12 + gap 4 + title 16 + gap 6 + desc(n×13) + gap 8 + impact 12 + bot-pad 14
+    const cardHeight = 14 + 12 + 4 + 16 + 6 + (descLines.length * 13) + 8 + 12 + 14;
+
+    // Card background + border + left accent bar
+    const cardSc = colorFor(catResults.find(r => r.cat.shortName === opp.catName)?.color || 'yellow');
+    const cardBg = i === 0 ? GOLD_LIGHT : WHITE;
+    doc.setFillColor(...cardBg);
+    setDraw(BORDER);
+    doc.setLineWidth(0.5);
+    doc.rect(56, oy, 500, cardHeight, 'FD');
+    doc.setFillColor(...cardSc);
+    doc.rect(56, oy, 4, cardHeight, 'F');
+
+    // Rank circle (gold filled)
+    setFill(GOLD);
+    doc.circle(82, oy + 20, 11, 'F');
+    setColor(WHITE);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${opp.rank}`, 82, oy + 24, { align: 'center' });
+
+    // Category label
+    setColor(GRAY);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setCharSpace(1.5);
+    doc.text(opp.catName.toUpperCase(), 104, oy + 16);
+    doc.setCharSpace(0);
+
+    // Opportunity title
+    setColor(CHARCOAL);
+    doc.setFontSize(12.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(opp.title, 104, oy + 32);
+
+    // Description text
+    setColor(GRAY_LIGHT);
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(descLines, 104, oy + 44);
+
+    // Impact badge text
+    setColor(GOLD);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setCharSpace(0.5);
+    doc.text(`IMPACT: ${opp.impact.toUpperCase()}`, 104, oy + cardHeight - 12);
+    doc.setCharSpace(0);
+
+    oy += cardHeight + 12;
+  });
+
+  // Divider before CTA
+  oy += 6;
+  borderLine(56, oy, W - 56);
+  oy += 18;
+
+  // CTA headline
+  setColor(GOLD);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  const ctaHeadLines = doc.splitTextToSize(
+    "Based on your results, here\u2019s where TMS Solutions can help you first.",
+    500
+  );
+  doc.text(ctaHeadLines, 56, oy);
+  oy += ctaHeadLines.length * 16 + 6;
+
+  // CTA body
+  setColor(GRAY_LIGHT);
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'normal');
+  const ctaBodyLines = doc.splitTextToSize(
+    "Your audit reveals clear, high-value opportunities to reclaim time and strengthen your customer experience. Let\u2019s map out a plan specific to your business \u2014 no generic templates, no pressure.",
+    500
+  );
+  doc.text(ctaBodyLines, 56, oy);
+  oy += ctaBodyLines.length * 13 + 14;
+
+  // Contact line
+  setColor(GOLD);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('hello@tmssolutionsgroup.com  \u00B7  tmssolutionsgroup.com', 56, oy);
+
+  goldBottomBar();
+  footer(3, TOTAL_PAGES);
+
+  // Save
+  const safeBiz = displayBiz !== 'Your Business'
+    ? displayBiz.replace(/[^a-z0-9\s]/gi, '').trim().replace(/\s+/g, '-')
+    : '';
+  const filename = safeBiz
+    ? `TMS-Automation-Audit-${safeBiz}.pdf`
+    : 'TMS-Automation-Audit-Report.pdf';
+
+  doc.save(filename);
+}
+
 function restartAudit() {
   currentCat = 0;
   answers = {};
   bizName = '';
+  lastResults = null;
   renderLanding();
   window.scrollTo(0, 0);
 }
